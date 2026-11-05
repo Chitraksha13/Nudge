@@ -5,7 +5,7 @@ export type Profile = {
   cashtag: string;
   zelle_handle: string;
 };
-export type Household = { id: string; name: string; invite_code: string };
+export type Household = { id: string; name: string; invite_code: string; nudge_every_days: number };
 export type SplitMode = "equal" | "amounts" | "percent";
 export type ShareStatus = "waiting" | "marked_paid" | "confirmed";
 export type Bill = {
@@ -27,4 +27,14 @@ export type BillShare = {
   marked_paid_at: number | null;
   confirmed_at: number | null;
   last_reminded_at: number | null;
+};
+
+export type Nudge = {
+  id: string;
+  household_id: string;
+  share_id: string;
+  to: string; // profile id who receives the message
+  kind: "new_bill" | "reminder" | "manual";
+  message: string;
+  at: number;
 };

@@ -2,11 +2,15 @@
 import { useParams } from "next/navigation";
 import { Avatar, Button, Card, Header, StatusPill, useRequire } from "@/components/ui";
 import { fmt } from "@/lib/money";
+import { nextNudge, nextNudgeLabel } from "@/lib/nudge";
 
-function ago(t: number | null) {
+function ago(t: number | null, now: number) {
   if (!t) return "never";
-  const m = Math.floor((Date.now() - t) / 60000);
-  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ago`;
+  const m = Math.floor((now - t) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} day${Math.floor(h / 24) === 1 ? "" : "s"} ago`;
 }
 
 export default function BillDetail() {
@@ -45,10 +49,23 @@ export default function BillDetail() {
                   {isPayer ? <span className="text-sm text-muted">Paid the bill</span> : <StatusPill status={x.status} />}
                 </div>
                 {!isPayer && (
-                  <div className="text-xs text-muted">
-                    Last reminder: {x.status === "confirmed" ? "n/a" : ago(x.last_reminded_at)}
-                    {x.paid_method ? ` · paid via ${x.paid_method}` : ""}
+                  <div className="space-y-0.5 text-xs text-muted">
+                    <div>
+                      Last reminder: {x.status === "confirmed" ? "n/a" : ago(x.last_reminded_at, s.now())}
+                      {x.paid_method ? ` · paid via ${x.paid_method}` : ""}
+                    </div>
+                    {x.status === "waiting" && (
+                      <div className="font-medium text-warntext">
+                        {nextNudgeLabel(nextNudge(x.last_reminded_at, s.household?.nudge_every_days ?? 0, s.now()))}
+                        {(s.household?.nudge_every_days ?? 0) > 0 && ` (every ${s.household?.nudge_every_days} days)`}
+                      </div>
+                    )}
                   </div>
+                )}
+                {bill.paid_by === me && x.status === "waiting" && !isPayer && (
+                  <Button variant="secondary" onClick={() => s.sendNudge(x.id)}>
+                    Nudge {p?.name} now
+                  </Button>
                 )}
                 {!isPayer && x.profile_id === me && x.status === "waiting" && (
                   <Button href={`/pay/${x.id}`}>Pay {s.profile(bill.paid_by)?.name}</Button>

@@ -39,3 +39,16 @@ describe("balances", () => {
     expect(balancesFor("me", bills, shares)).toMatchObject({ owedToMe: 500, iOwe: 200, net: 300 });
   });
 });
+
+import { DAY, nextNudge } from "./nudge";
+
+describe("nudge schedule", () => {
+  it("counts down and becomes due", () => {
+    expect(nextNudge(0, 2, 0)).toEqual({ due: false, inDays: 2 });
+    expect(nextNudge(0, 2, DAY + 1000)).toEqual({ due: false, inDays: 1 });
+    expect(nextNudge(0, 2, 2 * DAY)).toEqual({ due: true, inDays: 0 });
+  });
+  it("is null when off", () => {
+    expect(nextNudge(0, 0, 0)).toBeNull();
+  });
+});

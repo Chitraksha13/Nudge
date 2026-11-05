@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Plus } from "lucide-react";
-import { Avatar, Button, Card, Input, Segmented, StatusPill, useRequire } from "@/components/ui";
+import { ArrowLeft, Bell, Plus } from "lucide-react";
+import { FREQUENCIES, nextNudge, nextNudgeLabel } from "@/lib/nudge";
+import { Avatar, Button, Card, Input, Pill, Segmented, StatusPill, useRequire } from "@/components/ui";
 import { balancesFor } from "@/lib/balances";
 import { fmt } from "@/lib/money";
 
 export default function Home() {
   const s = useRequire();
-  const [tab, setTab] = useState<"feed" | "balances">("feed");
+  const [tab, setTab] = useState<"feed" | "balances" | "nudges">("feed");
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   if (!s || !s.me || !s.household) return null;
@@ -20,6 +21,18 @@ export default function Home() {
     const bill = s.bills.find((y) => y.id === x.bill_id);
     return bill && x.profile_id === me && bill.paid_by !== me && x.status !== "confirmed";
   });
+
+  const days = s.household.nudge_every_days;
+  const billIds = new Set(s.bills.map((x) => x.id));
+  const waiting = s.shares.filter((x) => {
+    const bill = s.bills.find((y) => y.id === x.bill_id);
+    return bill && billIds.has(x.bill_id) && x.status === "waiting" && bill.paid_by !== x.profile_id;
+  });
+  const upcoming = waiting
+    .map((x) => ({ x, n: nextNudge(x.last_reminded_at, days, s.now()) }))
+    .filter((r) => r.n)
+    .sort((a, z) => a.n!.inDays - z.n!.inDays);
+  const soonest = upcoming[0];
 
   return (
     <main className="space-y-4 px-4 pb-24 pt-5">
@@ -48,6 +61,48 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 font-medium">
+            <Bell size={18} /> Nudges
+          </div>
+          {s.dayOffset > 0 && <span className="text-xs text-muted">Demo: day +{s.dayOffset}</span>}
+        </div>
+        <div>
+          <div className="mb-1 text-sm text-ink2">Remind roommates who haven&apos;t paid every</div>
+          <Segmented
+            options={FREQUENCIES.map((f) => ({ value: String(f.value), label: f.label }))}
+            value={String(days)}
+            onChange={(v) => s.setNudgeDays(Number(v))}
+          />
+        </div>
+        <div className="rounded-xl bg-field p-3 text-sm text-ink2">
+          {waiting.length === 0
+            ? "Nobody owes anything in this group, so no nudges are scheduled."
+            : days === 0
+              ? `${waiting.length} unpaid share${waiting.length === 1 ? "" : "s"}. Reminders are off.`
+              : `${waiting.length} unpaid share${waiting.length === 1 ? "" : "s"}. ${
+                  soonest
+                    ? `${s.profile(soonest.x.profile_id)?.name}: ${nextNudgeLabel(soonest.n).toLowerCase()}.`
+                    : ""
+                }`}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={s.advanceDay}>Skip a day</Button>
+          <Button
+            onClick={() => {
+              s.runReminders();
+              setTab("nudges");
+            }}
+          >
+            Send due nudges
+          </Button>
+        </div>
+        <p className="text-xs text-muted">
+          In the real app this runs by itself once a day. Here, skip ahead and run it to see what roommates receive.
+        </p>
+      </Card>
 
       <div className="flex items-center gap-2">
         {s.memberIds.map((id) => (
@@ -78,12 +133,31 @@ export default function Home() {
         options={[
           { value: "feed", label: "Feed" },
           { value: "balances", label: "Balances" },
+          { value: "nudges", label: "Nudges" },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === "feed" ? (
+      {tab === "nudges" ? (
+        s.nudges.length === 0 ? (
+          <p className="py-8 text-center text-ink2">No nudges sent yet. They appear here as roommates get emails.</p>
+        ) : (
+          <div className="space-y-2">
+            {s.nudges.map((n) => (
+              <Card key={n.id} className="space-y-1 !p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">To {n.to === me ? "you" : s.profile(n.to)?.name}</span>
+                  <Pill tone={n.kind === "new_bill" ? "tint" : "warn"}>
+                    {n.kind === "new_bill" ? "New bill" : n.kind === "manual" ? "Manual nudge" : "Reminder"}
+                  </Pill>
+                </div>
+                <p className="text-sm text-ink2">{n.message}</p>
+              </Card>
+            ))}
+          </div>
+        )
+      ) : tab === "feed" ? (
         s.bills.length === 0 ? (
           <p className="py-8 text-center text-ink2">No bills yet. Add the first one.</p>
         ) : (

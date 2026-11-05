@@ -1,13 +1,15 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Avatar, Button, Header, Input, Label, useRequire } from "@/components/ui";
+import { Avatar, Button, Header, Input, Label, Segmented, useRequire } from "@/components/ui";
+import { FREQUENCIES } from "@/lib/nudge";
 
 export default function Household() {
   const s = useRequire(false);
   const router = useRouter();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string[]>(["jay", "rob", "leo"]);
+  const [freq, setFreq] = useState(2);
 
   if (!s) return null;
 
@@ -38,10 +40,18 @@ export default function Household() {
             ))}
           </div>
         </div>
+        <div>
+          <Label>Remind people who haven&apos;t paid every</Label>
+          <Segmented
+            options={FREQUENCIES.map((f) => ({ value: String(f.value), label: f.label }))}
+            value={String(freq)}
+            onChange={(v) => setFreq(Number(v))}
+          />
+        </div>
         <Button
           disabled={!name.trim()}
           onClick={() => {
-            s.createHousehold(name, picked);
+            s.createHousehold(name, picked, freq);
             router.push("/home");
           }}
         >
