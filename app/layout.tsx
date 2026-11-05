@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StoreProvider } from "@/lib/store";
 import { Toast } from "@/components/ui";
+import { TabBar } from "@/components/TabBar";
 
 export const metadata: Metadata = {
   title: "Nudge",
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <StoreProvider>
           <div className="mx-auto min-h-screen w-full max-w-[390px] bg-surface sm:border-x sm:border-line">
             {children}
+            <TabBar />
           </div>
           <Toast />
         </StoreProvider>

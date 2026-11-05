@@ -95,7 +95,7 @@ export function Toast() {
   const { toast } = useStore();
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 mx-auto w-[calc(100%-32px)] max-w-[358px] rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm">
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto w-[calc(100%-32px)] max-w-[358px] rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm">
       {toast}
     </div>
   );

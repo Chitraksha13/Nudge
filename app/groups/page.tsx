@@ -1,7 +1,6 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Settings } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Avatar, Button, Card, useRequire } from "@/components/ui";
 import { balancesFor } from "@/lib/balances";
 import { fmt } from "@/lib/money";
@@ -13,12 +12,7 @@ export default function Groups() {
 
   return (
     <main className="space-y-4 px-4 pb-24 pt-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-medium">Your groups</h1>
-        <Link href="/payment-methods" aria-label="Payment methods" className="p-1 text-ink2">
-          <Settings size={20} />
-        </Link>
-      </div>
+      <h1 className="text-xl font-medium">Your groups</h1>
 
       {s.households.length === 0 ? (
         <p className="py-8 text-center text-ink2">
@@ -65,7 +59,7 @@ export default function Groups() {
 
       <p className="text-center text-xs text-muted">Got an invite link? Open /join/code to join a group.</p>
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-[390px] bg-surface px-4 pb-5 pt-3">
+      <div className="fixed inset-x-0 bottom-14 mx-auto w-full max-w-[390px] bg-surface px-4 pb-5 pt-3">
         <Button href="/household">
           <span className="inline-flex items-center gap-1.5"><Plus size={18} /> New group</span>
         </Button>

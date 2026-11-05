@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Plus, Settings } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { Avatar, Button, Card, Input, Segmented, StatusPill, useRequire } from "@/components/ui";
 import { balancesFor } from "@/lib/balances";
 import { fmt } from "@/lib/money";
@@ -30,9 +30,6 @@ export default function Home() {
           </Link>
           <h1 className="text-xl font-medium">{s.household.name}</h1>
         </div>
-        <Link href="/payment-methods" aria-label="Payment methods" className="p-1 text-ink2">
-          <Settings size={20} />
-        </Link>
       </div>
 
       <div className="rounded-2xl bg-tint p-4 text-tinttext">
@@ -158,7 +155,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-[390px] bg-surface px-4 pb-5 pt-3">
+      <div className="fixed inset-x-0 bottom-14 mx-auto w-full max-w-[390px] bg-surface px-4 pb-5 pt-3">
         <Button href="/bills/new">
           <span className="inline-flex items-center gap-1.5"><Plus size={18} /> New bill</span>
         </Button>
