@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { amountsSplit, equalSplit, percentSplit } from "./split";
 import { balancesFor } from "./balances";
 import { parseDollars } from "./money";
-import type { Bill, BillShare } from "./types";
+import type { Bill, BillShare, Nudge } from "./types";
 
 const sum = (s: Record<string, number>) => Object.values(s).reduce((a, b) => a + b, 0);
 
@@ -72,10 +72,49 @@ describe("progress and activity", () => {
       { id: "s", bill_id: "b", profile_id: "jay", amount: 500, marked_paid_at: 300, confirmed_at: 400 },
     ] as BillShare[];
     const nudges = [
-      { id: "n1", kind: "new_bill", to: "jay", note: "", at: 100 },
-      { id: "n2", kind: "reminder", to: "jay", note: "Last nudge before this: 2 days ago", at: 200 },
-    ] as never[];
-    const ev = buildActivity(bills, shares, nudges, (id) => id);
+      { id: "n2", kind: "reminder", from: "me", to: "jay", amount: 500, bill_names: ["Rent"], note: "First nudge", at: 200 },
+    ] as Nudge[];
+    const ev = buildActivity(bills, shares, nudges, (id) => id, "me");
     expect(ev.map((e) => e.kind)).toEqual(["confirmed", "marked_paid", "nudge", "bill"]);
+  });
+});
+
+import { buildNudgePlan, owedGroups, pairKey } from "./nudge";
+
+describe("one nudge per person", () => {
+  const bills = [
+    { id: "b1", name: "Rent", paid_by: "me" },
+    { id: "b2", name: "Internet", paid_by: "me" },
+    { id: "b3", name: "Gas", paid_by: "jay" },
+  ] as Bill[];
+  const sh = (id: string, bill: string, who: string, amount: number, status = "waiting") =>
+    ({ id, bill_id: bill, profile_id: who, amount, status }) as BillShare;
+  const shares = [
+    sh("1", "b1", "me", 500, "confirmed"),
+    sh("2", "b1", "leo", 500),
+    sh("3", "b2", "leo", 300),
+    sh("4", "b1", "rob", 500, "marked_paid"),
+    sh("5", "b3", "me", 200),
+  ];
+
+  it("combines every unpaid bill into one group per person", () => {
+    const leo = owedGroups(bills, shares).find((g) => g.debtor === "leo")!;
+    expect(leo.amount).toBe(800);
+    expect(leo.billNames).toEqual(["Rent", "Internet"]);
+    expect(leo.shareIds).toEqual(["2", "3"]);
+  });
+  it("skips anyone who already paid and never includes the payer's own share", () => {
+    const debtors = owedGroups(bills, shares).map((g) => g.debtor);
+    expect(debtors).not.toContain("rob");
+    expect(owedGroups(bills, shares).some((g) => g.debtor === "me" && g.creditor === "me")).toBe(false);
+  });
+  it("plan: due vs not due, and paid people are listed as paid", () => {
+    const now = 10 * DAY;
+    const timers = { [pairKey("me", "leo")]: now - 2 * DAY, [pairKey("jay", "me")]: now - DAY };
+    const plan = buildNudgePlan("me", bills, shares, timers, 2, now);
+    expect(plan.due.map((g) => g.debtor)).toEqual(["leo"]);
+    expect(plan.rows.find((r) => r.other === "jay")).toMatchObject({ direction: "iOwe" });
+    expect(plan.rows.find((r) => r.other === "rob")).toMatchObject({ direction: "paid" });
+    expect(buildNudgePlan("me", bills, shares, timers, 0, now).due).toEqual([]);
   });
 });

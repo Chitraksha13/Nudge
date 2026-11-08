@@ -35,13 +35,16 @@ export type BillShare = {
   last_reminded_at: number | null;
 };
 
+// One nudge covers everything a person owes someone in a group (never one per bill or per share).
 export type Nudge = {
   id: string;
   household_id: string;
-  share_id: string;
-  to: string; // profile id who receives the message
-  kind: "new_bill" | "reminder" | "manual";
-  message: string;
-  note: string; // e.g. "Last nudge before this: 2 days ago"
+  from: string; // profile id of who is owed (the nudge is sent on their behalf)
+  to: string; // profile id who receives the nudge
+  share_ids: string[];
+  bill_names: string[];
+  amount: number; // integer cents, total across all those bills
+  kind: "reminder" | "manual";
+  note: string; // "First nudge" or "Previous nudge: 2 days ago"
   at: number;
 };

@@ -13,7 +13,8 @@ export function buildActivity(
   bills: Bill[],
   shares: BillShare[],
   nudges: Nudge[],
-  nameOf: (id: string) => string,
+  nameOf: (id: string) => string, // returns "You" for the signed-in user
+  me: string,
 ): ActivityEvent[] {
   const out: ActivityEvent[] = [];
   const billOf = new Map(bills.map((b) => [b.id, b]));
@@ -44,11 +45,10 @@ export function buildActivity(
       });
   }
   for (const n of nudges) {
-    if (n.kind === "new_bill") continue; // already covered by the "added" event
     out.push({
       id: `n-${n.id}`,
       kind: "nudge",
-      text: `Nudged ${nameOf(n.to)} · ${n.note.replace("Last nudge before this", "previous nudge")}`,
+      text: `${nameOf(n.from)} nudged ${n.to === me ? "you" : nameOf(n.to)} · ${fmt(n.amount)}`,
       at: n.at,
     });
   }

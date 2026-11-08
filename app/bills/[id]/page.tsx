@@ -2,7 +2,6 @@
 import { useParams } from "next/navigation";
 import { Avatar, Button, Card, Header, StatusPill, useRequire } from "@/components/ui";
 import { fmt } from "@/lib/money";
-import { agoLabel, nextNudge, nextNudgeLabel } from "@/lib/nudge";
 import { Ring } from "@/components/Progress";
 import { billProgress } from "@/lib/progress";
 
@@ -17,6 +16,9 @@ export default function BillDetail() {
   const payerName = bill.paid_by === me ? "You" : s.profile(bill.paid_by)?.name;
   const rows = s.shares.filter((x) => x.bill_id === bill.id);
   const prog = billProgress(rows, bill.paid_by);
+  const waitingOn = rows
+    .filter((x) => x.status === "waiting" && x.profile_id !== bill.paid_by)
+    .map((x) => (x.profile_id === me ? "you" : s.profile(x.profile_id)?.name ?? "someone"));
 
   return (
     <main>
@@ -34,6 +36,18 @@ export default function BillDetail() {
           </div>
           <Ring paid={prog.paid} total={prog.total} size={72} />
         </div>
+        {waitingOn.length > 0 && (
+          <div className="space-y-2 rounded-xl bg-field p-3">
+            <div className="text-sm text-ink2">
+              Waiting on {waitingOn.join(", ")}
+            </div>
+            {bill.paid_by === me && (
+              <Button variant="secondary" onClick={() => s.nudgeBill(bill.id)}>
+                Nudge everyone who owes
+              </Button>
+            )}
+          </div>
+        )}
         <div className="space-y-2">
           {rows.map((x) => {
             const p = s.profile(x.profile_id);
@@ -48,24 +62,8 @@ export default function BillDetail() {
                   </div>
                   {isPayer ? <span className="text-sm text-muted">Paid the bill</span> : <StatusPill status={x.status} />}
                 </div>
-                {!isPayer && (
-                  <div className="space-y-0.5 text-xs text-muted">
-                    <div>
-                      Last reminder: {x.status === "confirmed" ? "n/a" : agoLabel(x.last_reminded_at, s.now())}
-                      {x.paid_method ? ` · paid via ${x.paid_method}` : ""}
-                    </div>
-                    {x.status === "waiting" && (
-                      <div className="font-medium text-warntext">
-                        {nextNudgeLabel(nextNudge(x.last_reminded_at, s.household?.nudge_every_days ?? 0, s.now()))}
-                        {(s.household?.nudge_every_days ?? 0) > 0 && ` (every ${s.household?.nudge_every_days} days)`}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {bill.paid_by === me && x.status === "waiting" && !isPayer && (
-                  <Button variant="secondary" onClick={() => s.sendNudge(x.id)}>
-                    Nudge {p?.name} now
-                  </Button>
+                {!isPayer && x.paid_method && x.paid_method !== "demo" && (
+                  <div className="text-xs text-muted">Paid via {x.paid_method}</div>
                 )}
                 {!isPayer && x.profile_id === me && x.status === "waiting" && (
                   <Button href={`/pay/${x.id}`}>Pay {s.profile(bill.paid_by)?.name}</Button>

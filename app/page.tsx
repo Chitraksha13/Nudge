@@ -51,13 +51,10 @@ export default function SignIn() {
         >
           Try the demo
         </Button>
-        <p className="text-center text-xs text-muted">
-          &quot;Try the demo&quot; fills in a group with bills in different states so you can see everything at once.
-        </p>
       </form>
       <p className="rounded-xl bg-field p-3 text-sm text-ink2">
-        Demo mode: no account or email needed. Jay, Rob and Leo are already here as your friends. Everything resets
-        when you reload the page.
+        Demo mode: no account needed, and everything resets on reload. Jay, Rob and Leo are already here as your
+        friends, or tap &quot;Try the demo&quot; to see a group with bills already in progress.
       </p>
     </main>
   );

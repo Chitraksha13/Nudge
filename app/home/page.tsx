@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Bell, CheckCircle2, HandCoins, Plus, Receipt } from "lucide-react";
-import { FREQUENCIES, agoLabel, nextNudge, nextNudgeLabel } from "@/lib/nudge";
-import { Avatar, Button, Card, Input, Pill, Segmented, StatusPill, useRequire } from "@/components/ui";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Bell, Check, CheckCircle2, HandCoins, Plus, Receipt } from "lucide-react";
+import { FREQUENCIES, agoLabel } from "@/lib/nudge";
+import { Avatar, Button, Card, Input, Segmented, StatusPill, useRequire } from "@/components/ui";
 import { Bar } from "@/components/Progress";
 import { Tour } from "@/components/Tour";
 import { balancesFor } from "@/lib/balances";
@@ -11,11 +11,14 @@ import { buildActivity } from "@/lib/activity";
 import { billProgress } from "@/lib/progress";
 import { fmt } from "@/lib/money";
 import { useCountUp } from "@/lib/useCountUp";
+import type { Nudge } from "@/lib/types";
 
 function CountUp({ cents, signed = false }: { cents: number; signed?: boolean }) {
   const v = useCountUp(cents);
   return <>{signed ? `${v >= 0 ? "+" : "-"}$${(Math.abs(v) / 100).toFixed(2)}` : fmt(v)}</>;
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export default function Home() {
   const s = useRequire();
@@ -25,6 +28,7 @@ export default function Home() {
   if (!s || !s.me || !s.household) return null;
 
   const me = s.me.id;
+  const nameOf = (id: string) => (id === me ? "You" : s.profile(id)?.name ?? "Someone");
   const b = balancesFor(me, s.bills, s.shares);
   const others = s.memberIds.filter((id) => id !== me);
   const owedByMe = s.shares.filter((x) => {
@@ -33,18 +37,45 @@ export default function Home() {
   });
 
   const days = s.household.nudge_every_days;
-  const billIds = new Set(s.bills.map((x) => x.id));
-  const waiting = s.shares.filter((x) => {
-    const bill = s.bills.find((y) => y.id === x.bill_id);
-    return bill && billIds.has(x.bill_id) && x.status === "waiting" && bill.paid_by !== x.profile_id;
-  });
-  const upcoming = waiting
-    .map((x) => ({ x, n: nextNudge(x.last_reminded_at, days, s.now()) }))
-    .filter((r) => r.n)
-    .sort((a, z) => a.n!.inDays - z.n!.inDays);
-  const soonest = upcoming[0];
-  const activity = buildActivity(s.bills, s.shares, s.nudges, (id) =>
-    id === me ? "You" : s.profile(id)?.name ?? "Someone",
+  const plan = s.nudgePlan;
+  const activity = buildActivity(s.bills, s.shares, s.nudges, nameOf, me);
+  const sent = s.nudges.filter((n) => n.from === me);
+  const received = s.nudges.filter((n) => n.to === me);
+
+  const whenText = (n: (typeof plan.rows)[number]["next"]) =>
+    !n ? "nudges off" : n.due ? "nudge due now" : `nudge in ${plural(n.inDays, "day")}`;
+
+  const NudgeList = ({ title, items, empty }: { title: string; items: Nudge[]; empty: string }) => (
+    <section className="space-y-2">
+      <h2 className="text-sm text-ink2">
+        {title} <span className="text-muted">({items.length})</span>
+      </h2>
+      {items.length === 0 ? (
+        <p className="rounded-xl bg-field p-3 text-sm text-ink2">{empty}</p>
+      ) : (
+        items.map((n, i) => {
+          const outgoing = n.from === me;
+          const other = outgoing ? n.to : n.from;
+          return (
+            <Card key={n.id} className="item-in flex items-start gap-3 !p-3" >
+              <Avatar name={s.profile(other)?.name ?? "?"} />
+              <div className="min-w-0 flex-1" style={{ animationDelay: `${i * 40}ms` }}>
+                <div className="flex items-center gap-1 font-medium">
+                  {outgoing ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                  {outgoing ? `You nudged ${nameOf(other)}` : `${nameOf(other)} nudged you`}
+                </div>
+                <div className="text-sm text-ink2">
+                  {fmt(n.amount)} · {n.bill_names.join(", ")}
+                </div>
+                <div className="text-xs text-muted">
+                  {n.note} · {agoLabel(n.at, s.now())}
+                </div>
+              </div>
+            </Card>
+          );
+        })
+      )}
+    </section>
   );
 
   return (
@@ -78,45 +109,63 @@ export default function Home() {
       </div>
 
       <Card className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-medium">
-            <Bell size={18} /> Nudges
-          </div>
-          {s.dayOffset > 0 && <span className="text-xs text-muted">Demo: day +{s.dayOffset}</span>}
+        <div className="flex items-center gap-2 font-medium">
+          <Bell size={18} /> Nudges
         </div>
         <div>
-          <div className="mb-1 text-sm text-ink2">Remind roommates who haven&apos;t paid every</div>
+          <div className="mb-1 text-sm text-ink2">Nudge every</div>
           <Segmented
             options={FREQUENCIES.map((f) => ({ value: String(f.value), label: f.label }))}
             value={String(days)}
             onChange={(v) => s.setNudgeDays(Number(v))}
           />
+          <p className="mt-2 text-sm text-ink2">
+            {days === 0
+              ? "Nudges are off."
+              : `Anyone who owes you gets one nudge every ${plural(days, "day")} until they pay.`}
+          </p>
         </div>
-        <div className="rounded-xl bg-field p-3 text-sm text-ink2">
-          {waiting.length === 0
-            ? "Nobody owes anything in this group, so no nudges are scheduled."
-            : days === 0
-              ? `${waiting.length} unpaid share${waiting.length === 1 ? "" : "s"}. Reminders are off.`
-              : `${waiting.length} unpaid share${waiting.length === 1 ? "" : "s"}. ${
-                  soonest
-                    ? `${s.profile(soonest.x.profile_id)?.name}: ${nextNudgeLabel(soonest.n).toLowerCase()}.`
-                    : ""
-                }`}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={s.advanceDay}>Skip a day</Button>
+
+        {plan.rows.length === 0 ? (
+          <p className="rounded-xl bg-field p-3 text-sm text-ink2">Nobody owes anything, so no nudges are scheduled.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {plan.rows.map((r) => (
+              <li key={`${r.direction}-${r.other}`} className="flex items-center gap-3 py-2">
+                <Avatar name={s.profile(r.other)?.name ?? "?"} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{nameOf(r.other)}</div>
+                  <div className="text-sm text-ink2">
+                    {r.direction === "owesMe" && `Owes you · ${whenText(r.next)}`}
+                    {r.direction === "iOwe" && `You owe · ${whenText(r.next)}`}
+                    {r.direction === "paid" && (
+                      <span className="inline-flex items-center gap-1">
+                        <Check size={14} /> Paid · no more nudges
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {r.direction !== "paid" && <div className="font-medium">{fmt(r.amount)}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="space-y-2 rounded-xl bg-field p-3">
+          <div className="text-xs text-muted">
+            Demo only: time doesn&apos;t pass here, so fast-forward to see nudges go out.
+          </div>
+          <Button variant="secondary" onClick={s.advanceDay}>Fast-forward 1 day</Button>
           <Button
+            disabled={plan.due.length === 0}
             onClick={() => {
               s.runReminders();
               setTab("nudges");
             }}
           >
-            Send due nudges
+            Send due nudges ({plan.due.length})
           </Button>
         </div>
-        <p className="text-xs text-muted">
-          In the real app this runs by itself once a day. Here, skip ahead and run it to see what roommates receive.
-        </p>
       </Card>
 
       <div className="flex items-center gap-2">
@@ -181,24 +230,10 @@ export default function Home() {
           </ol>
         )
       ) : tab === "nudges" ? (
-        s.nudges.length === 0 ? (
-          <p className="py-8 text-center text-ink2">No nudges sent yet. They appear here as roommates get emails.</p>
-        ) : (
-          <div className="space-y-2">
-            {s.nudges.map((n) => (
-              <Card key={n.id} className="space-y-1 !p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">To {n.to === me ? "you" : s.profile(n.to)?.name}</span>
-                  <Pill tone={n.kind === "new_bill" ? "tint" : "warn"}>
-                    {n.kind === "new_bill" ? "New bill" : n.kind === "manual" ? "Manual nudge" : "Reminder"}
-                  </Pill>
-                </div>
-                <p className="text-sm text-ink2">{n.message}</p>
-                <p className="text-xs text-muted">{n.note}</p>
-              </Card>
-            ))}
-          </div>
-        )
+        <div className="space-y-5">
+          <NudgeList title="You sent" items={sent} empty="You haven't nudged anyone yet." />
+          <NudgeList title="You received" items={received} empty="Nobody has nudged you." />
+        </div>
       ) : tab === "feed" ? (
         s.bills.length === 0 ? (
           <p className="py-8 text-center text-ink2">No bills yet. Add the first one.</p>
@@ -222,9 +257,7 @@ export default function Home() {
                       <Avatar name={s.profile(bill.paid_by)?.name ?? "?"} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{bill.name}</div>
-                        <div className="text-sm text-ink2">
-                          {bill.paid_by === me ? "You" : s.profile(bill.paid_by)?.name} paid
-                        </div>
+                        <div className="text-sm text-ink2">{nameOf(bill.paid_by)} paid</div>
                       </div>
                       <div className="text-right">
                         <div className="font-medium">{fmt(bill.total_amount)}</div>

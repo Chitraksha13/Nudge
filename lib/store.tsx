@@ -3,8 +3,7 @@
 // Types mirror the Postgres data model so Supabase can replace this later.
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import type { Bill, BillShare, Household, Nudge, Profile, SplitMode } from "./types";
-import { DAY, agoLabel } from "./nudge";
-import { fmt } from "./money";
+import { DAY, agoLabel, buildNudgePlan, owedGroups, pairKey, type OweGroup } from "./nudge";
 
 const FRIENDS: Profile[] = [
   { id: "jay", name: "Jay", venmo_username: "jay-demo", cashtag: "jaydemo", zelle_handle: "jay@example.com" },
@@ -41,11 +40,12 @@ type Store = {
   // Nudges (reminders)
   now: () => number; // demo clock: real time plus any skipped days
   dayOffset: number;
-  nudges: Nudge[]; // reminder log for the current group
+  nudges: Nudge[]; // nudge log for the current group
+  nudgePlan: ReturnType<typeof buildNudgePlan>; // who owes whom, and which nudges are due
   setNudgeDays: (days: number) => void;
   advanceDay: () => void;
-  runReminders: () => number; // what the daily cron job does
-  sendNudge: (shareId: string) => void; // manual "nudge now"
+  runReminders: () => number; // what the daily cron job does: one nudge per person who is due
+  nudgeBill: (billId: string) => void; // manual: nudge everyone still waiting on this bill
   enter: (householdId: string) => void;
   addMember: (name: string) => void;
   createBill: (b: NewBill) => string;
@@ -74,6 +74,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [dayOffset, setDayOffset] = useState(0);
   const [tourDone, setTourDone] = useState(false);
   const [nudgeLog, setNudgeLog] = useState<Nudge[]>([]);
+  // When each "creditor>debtor" pair was last nudged (or started owing). One timer per person, not per bill.
+  const [pairNudged, setPairNudged] = useState<Record<string, number>>({});
   const counter = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const uid = (p: string) => `${p}${++counter.current}`;
@@ -89,41 +91,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const nowMs = () => Date.now() + dayOffset * DAY;
   const nameOf = (id: string) => profiles.find((p) => p.id === id)?.name ?? "Someone";
+  const groupBills = household ? allBills.filter((b) => b.household_id === household.id) : [];
+  const nudgePlan =
+    household && me
+      ? buildNudgePlan(me.id, groupBills, shares, pairNudged, household.nudge_every_days, nowMs())
+      : { rows: [], due: [] };
 
-  // Builds the message a roommate would get by email, and logs it.
-  const makeNudge = (
-    bill: Bill,
-    share: BillShare,
-    kind: Nudge["kind"],
-    at: number,
-    previous: number | null = null,
-  ): Nudge => {
-    const body =
-      kind === "new_bill"
-        ? `New bill: ${bill.name}. You owe ${nameOf(bill.paid_by)} ${fmt(share.amount)}.`
-        : `Friendly nudge: you still owe ${nameOf(bill.paid_by)} ${fmt(share.amount)} for ${bill.name}.`;
-    return {
-      id: uid("n"),
-      household_id: bill.household_id,
-      share_id: share.id,
-      to: share.profile_id,
-      kind,
-      message: `Hi ${nameOf(share.profile_id)}, ${body[0].toLowerCase()}${body.slice(1)} Tap to pay.`,
-      note:
-        kind === "new_bill"
-          ? "First message about this bill"
-          : `Last nudge before this: ${agoLabel(previous, at)}`,
-      at,
-    };
-  };
-
-  const sendTo = (list: BillShare[], kind: Nudge["kind"]) => {
+  // Sends ONE nudge per person, covering everything they owe in the group, and restarts that person's timer.
+  const sendPairs = (groups: OweGroup[], kind: Nudge["kind"]) => {
+    if (!household || groups.length === 0) return;
     const at = nowMs();
-    const entries = list.flatMap((s) => {
-      const bill = allBills.find((b) => b.id === s.bill_id);
-      return bill ? [makeNudge(bill, s, kind, at, s.last_reminded_at)] : [];
-    });
-    const ids = new Set(list.map((s) => s.id));
+    const entries: Nudge[] = groups.map((g) => ({
+      id: uid("n"),
+      household_id: household.id,
+      from: g.creditor,
+      to: g.debtor,
+      share_ids: g.shareIds,
+      bill_names: g.billNames,
+      amount: g.amount,
+      kind,
+      note: pairNudged[g.key] ? `Previous nudge: ${agoLabel(pairNudged[g.key], at)}` : "First nudge",
+      at,
+    }));
+    setPairNudged((p) => ({ ...p, ...Object.fromEntries(groups.map((g) => [g.key, at])) }));
+    const ids = new Set(groups.flatMap((g) => g.shareIds));
     setShares((x) => x.map((s) => (ids.has(s.id) ? { ...s, last_reminded_at: at } : s)));
     setNudgeLog((n) => [...entries.reverse(), ...n]);
   };
@@ -165,7 +156,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     loadDemo: () => {
       const base = Date.now();
       const t = (days: number) => base - days * DAY;
-      const names: Record<string, string> = { me: "Alex", jay: "Jay", rob: "Rob", leo: "Leo" };
       const hid = uid("h");
       const mkShare = (bill: string, pid: string, amount: number, o: Partial<BillShare> = {}): BillShare => ({
         id: uid("s"),
@@ -188,24 +178,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         split_mode: "equal",
         created_at: at,
       });
-      const log: Nudge[] = [];
-      const note = (b: Bill, s: BillShare, kind: Nudge["kind"], at: number, prev: string) => {
-        const body =
-          kind === "new_bill"
-            ? `new bill: ${b.name}. You owe ${names[b.paid_by]} ${fmt(s.amount)}.`
-            : `friendly nudge: you still owe ${names[b.paid_by]} ${fmt(s.amount)} for ${b.name}.`;
-        log.push({
-          id: uid("n"),
-          household_id: hid,
-          share_id: s.id,
-          to: s.profile_id,
-          kind,
-          message: `Hi ${names[s.profile_id]}, ${body} Tap to pay.`,
-          note: kind === "new_bill" ? "First message about this bill" : `Last nudge before this: ${prev}`,
-          at,
-        });
-      };
-
       // Rent: Alex paid. Jay and Rob confirmed, Leo is overdue for a nudge.
       const rent = mkBill("Rent", 240000, "me", t(4));
       const rentShares = [
@@ -214,8 +186,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         mkShare(rent.id, "rob", 60000, { status: "confirmed", paid_method: "Zelle", marked_paid_at: t(2), confirmed_at: t(2), last_reminded_at: t(4) }),
         mkShare(rent.id, "leo", 60000, { last_reminded_at: t(2) }),
       ];
-      rentShares.filter((s) => s.profile_id !== "me").forEach((s) => note(rent, s, "new_bill", t(4), ""));
-      note(rent, rentShares[3], "reminder", t(2), "2 days ago");
 
       // Internet: Jay paid. Alex still owes, Rob marked paid and awaits confirmation.
       const net = mkBill("Internet", 8000, "jay", t(3));
@@ -225,8 +195,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         mkShare(net.id, "rob", 2000, { status: "marked_paid", paid_method: "Venmo", marked_paid_at: t(1), last_reminded_at: t(3) }),
         mkShare(net.id, "leo", 2000, { status: "confirmed", paid_method: "Cash App", marked_paid_at: t(2), confirmed_at: t(2), last_reminded_at: t(3) }),
       ];
-      netShares.filter((s) => s.profile_id !== "jay").forEach((s) => note(net, s, "new_bill", t(3), ""));
-      note(net, netShares[1], "reminder", t(1), "2 days ago");
 
       // Groceries: Alex paid yesterday, nobody has paid yet.
       const groc = mkBill("Groceries", 6440, "me", t(1));
@@ -236,7 +204,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         mkShare(groc.id, "rob", 1610, { last_reminded_at: t(1) }),
         mkShare(groc.id, "leo", 1610, { last_reminded_at: t(1) }),
       ];
-      grocShares.filter((s) => s.profile_id !== "me").forEach((s) => note(groc, s, "new_bill", t(1), ""));
 
       setMe({ id: "me", name: "Alex", venmo_username: "alex-demo", cashtag: "alexdemo", zelle_handle: "alex@example.com" });
       setExtra([]);
@@ -247,39 +214,79 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setActiveId(hid);
       setBills([groc, net, rent]);
       setShares([...rentShares, ...netShares, ...grocShares]);
-      setNudgeLog(log.sort((a, z) => z.at - a.at));
+      // One timer per person. Leo is due now (2 days since his last nudge); the rest are 1 day out.
+      setPairNudged({ [pairKey("me", "leo")]: t(2), [pairKey("me", "jay")]: t(1), [pairKey("me", "rob")]: t(1), [pairKey("jay", "me")]: t(1) });
+      setNudgeLog([
+        {
+          id: uid("n"),
+          household_id: hid,
+          from: "jay",
+          to: "me",
+          share_ids: [netShares[1].id],
+          bill_names: ["Internet"],
+          amount: 2000,
+          kind: "reminder",
+          note: "First nudge",
+          at: t(1),
+        },
+        {
+          id: uid("n"),
+          household_id: hid,
+          from: "me",
+          to: "leo",
+          share_ids: [rentShares[3].id],
+          bill_names: ["Rent"],
+          amount: 60000,
+          kind: "reminder",
+          note: "First nudge",
+          at: t(2),
+        },
+      ]);
     },
     now: nowMs,
     dayOffset,
+    nudgePlan,
     nudges: household ? nudgeLog.filter((n) => n.household_id === household.id) : [],
     setNudgeDays: (days) =>
       setHouseholds((hs) => hs.map((h) => (h.id === activeId ? { ...h, nudge_every_days: days } : h))),
     advanceDay: () => {
       setDayOffset((d) => d + 1);
-      flash("Skipped ahead one day (demo)");
+      flash("Fast-forwarded one day (demo)");
     },
     runReminders: () => {
       if (!household || household.nudge_every_days <= 0) {
-        flash("Reminders are off for this group");
+        flash("Nudges are off for this group");
         return 0;
       }
-      const ids = new Set(allBills.filter((b) => b.household_id === household.id).map((b) => b.id));
-      const due = shares.filter(
-        (s) =>
-          ids.has(s.bill_id) &&
-          s.status === "waiting" &&
-          s.last_reminded_at !== null &&
-          nowMs() - s.last_reminded_at >= household.nudge_every_days * DAY,
+      const due = nudgePlan.due;
+      sendPairs(due, "reminder");
+      flash(
+        due.length
+          ? `Sent ${due.length} nudge${due.length === 1 ? "" : "s"}`
+          : "No nudges are due yet",
       );
-      if (due.length) sendTo(due, "reminder");
-      flash(due.length ? `Sent ${due.length} reminder${due.length === 1 ? "" : "s"}` : "No reminders due yet");
       return due.length;
     },
-    sendNudge: (shareId) => {
-      const s = shares.find((x) => x.id === shareId);
-      if (!s || s.status !== "waiting") return;
-      sendTo([s], "manual");
-      flash(`Nudge sent to ${nameOf(s.profile_id)}. Last nudge before this: ${agoLabel(s.last_reminded_at, nowMs())}`);
+    nudgeBill: (billId) => {
+      const bill = groupBills.find((b) => b.id === billId);
+      if (!bill) return;
+      const waitingHere = new Set(
+        shares.filter((s) => s.bill_id === billId && s.status === "waiting").map((s) => s.id),
+      );
+      // One nudge per person still waiting on this bill, covering everything they owe the payer.
+      const groups = owedGroups(groupBills, shares).filter(
+        (g) => g.creditor === bill.paid_by && g.shareIds.some((id) => waitingHere.has(id)),
+      );
+      if (groups.length === 0) {
+        flash("Nobody owes anything on this bill");
+        return;
+      }
+      const names = groups.map((g) => nameOf(g.debtor));
+      const prev = pairNudged[groups[0].key];
+      sendPairs(groups, "manual");
+      flash(
+        `Nudged ${names.join(" and ")}${prev ? `. Previous nudge: ${agoLabel(prev, nowMs())}` : ""}`,
+      );
     },
     joinDemoHousehold: (code) => addGroup("The flat", code, ["me", "jay", "rob", "leo"]),
     enter: (id) => setActiveId(id),
@@ -317,9 +324,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       setBills((x) => [bill, ...x]);
       setShares((x) => [...x, ...rows]);
+      // Start a nudge timer for anyone who didn't already owe this payer. People who already owe keep
+      // their running timer, so adding a bill never delays or multiplies their nudges.
+      const active = new Set(owedGroups(groupBills, shares).map((g) => g.key));
       const owing = rows.filter((r) => r.profile_id !== b.paidBy);
-      setNudgeLog((l) => [...owing.map((r) => makeNudge(bill, r, "new_bill", now)).reverse(), ...l]);
-      flash(`Emailed ${owing.length} roommate${owing.length === 1 ? "" : "s"} about this bill (demo)`);
+      setPairNudged((p) => {
+        const next = { ...p };
+        for (const r of owing) {
+          const key = pairKey(b.paidBy, r.profile_id);
+          if (!active.has(key)) next[key] = now;
+        }
+        return next;
+      });
+      flash(`Everyone who owes was told about ${bill.name} (demo)`);
       return bill.id;
     },
     markPaid: (id, method) =>
