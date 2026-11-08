@@ -6,9 +6,9 @@ import { ArrowLeft } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const primary =
-  "block w-full rounded-full bg-accent py-2.5 text-center font-medium text-onaccent disabled:opacity-40";
+  "press block w-full rounded-full bg-accent py-2.5 text-center font-medium text-onaccent disabled:opacity-40";
 const secondary =
-  "block w-full rounded-full border border-line bg-transparent py-2.5 text-center font-medium text-ink disabled:opacity-40";
+  "press block w-full rounded-full border border-line bg-transparent py-2.5 text-center font-medium text-ink disabled:opacity-40";
 
 export function Button({
   variant = "primary",
@@ -95,7 +95,7 @@ export function Toast() {
   const { toast } = useStore();
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto w-[calc(100%-32px)] max-w-[358px] rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm">
+    <div className="toast-in pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto w-[calc(100%-32px)] max-w-[358px] rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm">
       {toast}
     </div>
   );

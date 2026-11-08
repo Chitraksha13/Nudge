@@ -5,15 +5,14 @@ const sections = [
     label: "Why I made Nudge",
     title: "Splitting is easy. Getting paid back isn’t.",
     body: [
-      "My name is Chitraksha, and I’m a computer engineering and computer science student at Northeastern. Over my years in college so far, I’ve learned that splitting bills is easy, but getting paid back isn’t. Countless times I’ve paid the electric or gas bill and not gotten paid back until weeks later, sometimes because it slipped my mind entirely.",
-      "When I talked to 30+ other college students, almost everyone had the same story. Nobody minded paying their share; they just hated being the one who had to ask. I built Nudge so getting paid back happens on its own, without the awkward follow-up texts.",
+      "In college, I’ve covered countless bills and waited weeks to get paid back, or forgotten I was owed at all. When I talked to 30+ students, almost everyone had the same story. Nobody minded paying their share; they just hated being the one who had to ask. I built Nudge so getting paid back happens on its own, without the awkward follow-up texts.",
     ],
   },
   {
     label: "The problem",
     title: "Asking for money is awkward.",
     body: [
-      "Payment apps make sending money easy, and group chats make splitting the math easy. But the hardest part of shared living is the follow-up: texting a roommate for the third time, wondering if you’re being petty, or just eating the cost to avoid the conversation.",
+      "Payment apps make sending money easy, and group chats make splitting the math easy. But the hardest part of shared living is the follow-up: texting a roommate for the third time.",
     ],
   },
   {
@@ -27,7 +26,7 @@ const sections = [
     label: "Who it’s for",
     title: "Anyone who shares bills with roommates.",
     body: [
-      "Nudge was originally designed for college students, to make splitting costs easier without sending constant reminders. But it works for any living situation where people share bills, whether that’s your first apartment, a sublet, or a house with friends.",
+      "Nudge started with college students, but it works anywhere people share bills: your first apartment, a sublet, or a trip with friends.",
     ],
   },
 ];

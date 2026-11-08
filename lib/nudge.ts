@@ -20,3 +20,14 @@ export function nextNudgeLabel(n: ReturnType<typeof nextNudge>): string {
   if (n.due) return "Nudge due now";
   return `Next nudge in ${n.inDays} day${n.inDays === 1 ? "" : "s"}`;
 }
+
+export function agoLabel(t: number | null, now: number): string {
+  if (!t) return "never";
+  const m = Math.floor((now - t) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+}

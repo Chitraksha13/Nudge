@@ -4,12 +4,15 @@ import { useState } from "react";
 import { Avatar, Button, Header, Input, Label, Segmented, useRequire } from "@/components/ui";
 import { FREQUENCIES } from "@/lib/nudge";
 
+const EMOJIS = ["🏠", "🎓", "✈️", "🍕", "🎉", "🏕️", "🎮", "💼"];
+
 export default function Household() {
   const s = useRequire(false);
   const router = useRouter();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string[]>(["jay", "rob", "leo"]);
   const [freq, setFreq] = useState(2);
+  const [emoji, setEmoji] = useState(EMOJIS[0]);
 
   if (!s) return null;
 
@@ -22,6 +25,25 @@ export default function Household() {
         <div>
           <Label>Group name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="The flat, Ski trip, ..." />
+        </div>
+        <div>
+          <Label>Pick an emoji</Label>
+          <div className="flex flex-wrap gap-2">
+            {EMOJIS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setEmoji(e)}
+                aria-label={`Emoji ${e}`}
+                aria-pressed={emoji === e}
+                className={`press flex h-10 w-10 items-center justify-center rounded-full border text-xl ${
+                  emoji === e ? "border-accent bg-tint" : "border-line"
+                }`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
         </div>
         <div>
           <Label>Add your friends</Label>
@@ -51,7 +73,7 @@ export default function Household() {
         <Button
           disabled={!name.trim()}
           onClick={() => {
-            s.createHousehold(name, picked, freq);
+            s.createHousehold(name, picked, freq, emoji);
             router.push("/home");
           }}
         >

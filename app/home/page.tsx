@@ -1,15 +1,25 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Bell, Plus } from "lucide-react";
-import { FREQUENCIES, nextNudge, nextNudgeLabel } from "@/lib/nudge";
+import { ArrowLeft, Bell, CheckCircle2, HandCoins, Plus, Receipt } from "lucide-react";
+import { FREQUENCIES, agoLabel, nextNudge, nextNudgeLabel } from "@/lib/nudge";
 import { Avatar, Button, Card, Input, Pill, Segmented, StatusPill, useRequire } from "@/components/ui";
+import { Bar } from "@/components/Progress";
+import { Tour } from "@/components/Tour";
 import { balancesFor } from "@/lib/balances";
+import { buildActivity } from "@/lib/activity";
+import { billProgress } from "@/lib/progress";
 import { fmt } from "@/lib/money";
+import { useCountUp } from "@/lib/useCountUp";
+
+function CountUp({ cents, signed = false }: { cents: number; signed?: boolean }) {
+  const v = useCountUp(cents);
+  return <>{signed ? `${v >= 0 ? "+" : "-"}$${(Math.abs(v) / 100).toFixed(2)}` : fmt(v)}</>;
+}
 
 export default function Home() {
   const s = useRequire();
-  const [tab, setTab] = useState<"feed" | "balances" | "nudges">("feed");
+  const [tab, setTab] = useState<"feed" | "balances" | "nudges" | "activity">("feed");
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   if (!s || !s.me || !s.household) return null;
@@ -33,6 +43,9 @@ export default function Home() {
     .filter((r) => r.n)
     .sort((a, z) => a.n!.inDays - z.n!.inDays);
   const soonest = upcoming[0];
+  const activity = buildActivity(s.bills, s.shares, s.nudges, (id) =>
+    id === me ? "You" : s.profile(id)?.name ?? "Someone",
+  );
 
   return (
     <main className="space-y-4 px-4 pb-24 pt-5">
@@ -41,23 +54,25 @@ export default function Home() {
           <Link href="/groups" aria-label="All groups" className="-ml-1 p-1 text-ink2">
             <ArrowLeft size={20} />
           </Link>
+          <span className="text-2xl" aria-hidden>{s.household.emoji}</span>
           <h1 className="text-xl font-medium">{s.household.name}</h1>
         </div>
       </div>
+      {!s.tourDone && <Tour onDone={s.finishTour} />}
 
       <div className="rounded-2xl bg-tint p-4 text-tinttext">
         <div className="text-sm">Net balance</div>
         <div className="text-[30px] font-medium leading-tight">
-          {b.net >= 0 ? "+" : "-"}${(Math.abs(b.net) / 100).toFixed(2)}
+          <CountUp cents={b.net} signed />
         </div>
         <div className="mt-3 flex gap-6 text-sm">
           <div>
             <div className="opacity-80">Owed to you</div>
-            <div className="font-medium">{fmt(b.owedToMe)}</div>
+            <div className="font-medium"><CountUp cents={b.owedToMe} /></div>
           </div>
           <div>
             <div className="opacity-80">You owe</div>
-            <div className="font-medium">{fmt(b.iOwe)}</div>
+            <div className="font-medium"><CountUp cents={b.iOwe} /></div>
           </div>
         </div>
       </div>
@@ -134,12 +149,38 @@ export default function Home() {
           { value: "feed", label: "Feed" },
           { value: "balances", label: "Balances" },
           { value: "nudges", label: "Nudges" },
+          { value: "activity", label: "Activity" },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === "nudges" ? (
+      {tab === "activity" ? (
+        activity.length === 0 ? (
+          <p className="py-8 text-center text-ink2">Nothing has happened yet. Add a bill to get started.</p>
+        ) : (
+          <ol className="space-y-1">
+            {activity.map((e, i) => {
+              const Icon = { bill: Receipt, nudge: Bell, marked_paid: HandCoins, confirmed: CheckCircle2 }[e.kind];
+              return (
+                <li
+                  key={e.id}
+                  className="item-in flex items-start gap-3 py-2"
+                  style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
+                >
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-tint text-tinttext">
+                    <Icon size={16} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm">{e.text}</div>
+                    <div className="text-xs text-muted">{agoLabel(e.at, s.now())}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )
+      ) : tab === "nudges" ? (
         s.nudges.length === 0 ? (
           <p className="py-8 text-center text-ink2">No nudges sent yet. They appear here as roommates get emails.</p>
         ) : (
@@ -153,6 +194,7 @@ export default function Home() {
                   </Pill>
                 </div>
                 <p className="text-sm text-ink2">{n.message}</p>
+                <p className="text-xs text-muted">{n.note}</p>
               </Card>
             ))}
           </div>
@@ -162,21 +204,36 @@ export default function Home() {
           <p className="py-8 text-center text-ink2">No bills yet. Add the first one.</p>
         ) : (
           <div className="space-y-2">
-            {s.bills.map((bill) => {
+            {s.bills.map((bill, i) => {
               const mine = s.shares.find((x) => x.bill_id === bill.id && x.profile_id === me);
+              const prog = billProgress(
+                s.shares.filter((x) => x.bill_id === bill.id),
+                bill.paid_by,
+              );
               return (
-                <Link key={bill.id} href={`/bills/${bill.id}`}>
-                  <Card className="mb-2 flex items-center gap-3 !p-3">
-                    <Avatar name={s.profile(bill.paid_by)?.name ?? "?"} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{bill.name}</div>
-                      <div className="text-sm text-ink2">
-                        {bill.paid_by === me ? "You" : s.profile(bill.paid_by)?.name} paid
+                <Link
+                  key={bill.id}
+                  href={`/bills/${bill.id}`}
+                  className="item-in press block"
+                  style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }}
+                >
+                  <Card className="mb-2 space-y-2 !p-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={s.profile(bill.paid_by)?.name ?? "?"} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{bill.name}</div>
+                        <div className="text-sm text-ink2">
+                          {bill.paid_by === me ? "You" : s.profile(bill.paid_by)?.name} paid
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{fmt(bill.total_amount)}</div>
+                        {mine && bill.paid_by !== me && <StatusPill status={mine.status} />}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-medium">{fmt(bill.total_amount)}</div>
-                      {mine && bill.paid_by !== me && <StatusPill status={mine.status} />}
+                    <Bar paid={prog.paid} total={prog.total} />
+                    <div className="text-xs text-muted">
+                      {prog.paid === prog.total ? "Everyone has paid" : `${prog.paid} of ${prog.total} paid`}
                     </div>
                   </Card>
                 </Link>

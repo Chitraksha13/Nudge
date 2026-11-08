@@ -5,7 +5,7 @@ import { Button, Input, Label } from "@/components/ui";
 import { useStore } from "@/lib/store";
 
 export default function SignIn() {
-  const { me, signIn } = useStore();
+  const { me, signIn, loadDemo } = useStore();
   const router = useRouter();
   const [name, setName] = useState("");
 
@@ -42,6 +42,18 @@ export default function SignIn() {
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" autoFocus />
         </div>
         <Button type="submit" disabled={!name.trim()}>Continue</Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            loadDemo();
+            router.push("/home");
+          }}
+        >
+          Try the demo
+        </Button>
+        <p className="text-center text-xs text-muted">
+          &quot;Try the demo&quot; fills in a group with bills in different states so you can see everything at once.
+        </p>
       </form>
       <p className="rounded-xl bg-field p-3 text-sm text-ink2">
         Demo mode: no account or email needed. Jay, Rob and Leo are already here as your friends. Everything resets

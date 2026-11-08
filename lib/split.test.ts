@@ -52,3 +52,30 @@ describe("nudge schedule", () => {
     expect(nextNudge(0, 0, 0)).toBeNull();
   });
 });
+
+import { billProgress } from "./progress";
+import { buildActivity } from "./activity";
+
+describe("progress and activity", () => {
+  it("counts only confirmed non-payer shares", () => {
+    const shares = [
+      { profile_id: "me", status: "confirmed" },
+      { profile_id: "jay", status: "confirmed" },
+      { profile_id: "rob", status: "marked_paid" },
+      { profile_id: "leo", status: "waiting" },
+    ] as BillShare[];
+    expect(billProgress(shares, "me")).toEqual({ paid: 1, total: 3 });
+  });
+  it("sorts activity newest first and skips the new-bill nudge", () => {
+    const bills = [{ id: "b", name: "Rent", paid_by: "me", total_amount: 1000, created_at: 100 }] as Bill[];
+    const shares = [
+      { id: "s", bill_id: "b", profile_id: "jay", amount: 500, marked_paid_at: 300, confirmed_at: 400 },
+    ] as BillShare[];
+    const nudges = [
+      { id: "n1", kind: "new_bill", to: "jay", note: "", at: 100 },
+      { id: "n2", kind: "reminder", to: "jay", note: "Last nudge before this: 2 days ago", at: 200 },
+    ] as never[];
+    const ev = buildActivity(bills, shares, nudges, (id) => id);
+    expect(ev.map((e) => e.kind)).toEqual(["confirmed", "marked_paid", "nudge", "bill"]);
+  });
+});

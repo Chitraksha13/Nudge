@@ -20,7 +20,7 @@ export default function Groups() {
         </p>
       ) : (
         <div className="space-y-2">
-          {s.households.map((h) => {
+          {s.households.map((h, i) => {
             const ids = s.membersOf(h.id);
             const net = balancesFor(
               s.me!.id,
@@ -31,7 +31,8 @@ export default function Groups() {
               <button
                 key={h.id}
                 type="button"
-                className="block w-full text-left"
+                className="item-in press block w-full text-left"
+                style={{ animationDelay: `${i * 60}ms` }}
                 onClick={() => {
                   s.enter(h.id);
                   router.push("/home");
@@ -39,7 +40,10 @@ export default function Groups() {
               >
                 <Card className="space-y-3 !p-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{h.name}</span>
+                    <span className="flex items-center gap-2 font-medium">
+                      <span className="text-xl" aria-hidden>{h.emoji}</span>
+                      {h.name}
+                    </span>
                     <span className="text-sm text-ink2">
                       {net === 0 ? "Settled up" : net > 0 ? `owed ${fmt(net)}` : `you owe ${fmt(-net)}`}
                     </span>

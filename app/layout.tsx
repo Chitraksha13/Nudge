@@ -13,7 +13,16 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply a saved light/dark choice before first paint so there's no flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("nudge-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}',
+          }}
+        />
+      </head>
       <body>
         <StoreProvider>
           <div className="mx-auto min-h-screen w-full max-w-[390px] bg-surface sm:border-x sm:border-line">

@@ -4,6 +4,8 @@ Nudge is a mobile-first web app for roommates (or any group) to track shared bil
 
 > **Current state: demo mode.** There is no backend yet. You sign in with just a name, Jay, Rob and Leo are pre-made friends, and everything lives in memory, so reloading the page wipes it. The architecture below is the planned production setup.
 
+**Live demo:** https://nudge-theta-lemon.vercel.app/
+
 ## Run it
 
 ```

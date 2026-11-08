@@ -2,16 +2,9 @@
 import { useParams } from "next/navigation";
 import { Avatar, Button, Card, Header, StatusPill, useRequire } from "@/components/ui";
 import { fmt } from "@/lib/money";
-import { nextNudge, nextNudgeLabel } from "@/lib/nudge";
-
-function ago(t: number | null, now: number) {
-  if (!t) return "never";
-  const m = Math.floor((now - t) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} day${Math.floor(h / 24) === 1 ? "" : "s"} ago`;
-}
+import { agoLabel, nextNudge, nextNudgeLabel } from "@/lib/nudge";
+import { Ring } from "@/components/Progress";
+import { billProgress } from "@/lib/progress";
 
 export default function BillDetail() {
   const s = useRequire();
@@ -23,16 +16,23 @@ export default function BillDetail() {
   const me = s.me.id;
   const payerName = bill.paid_by === me ? "You" : s.profile(bill.paid_by)?.name;
   const rows = s.shares.filter((x) => x.bill_id === bill.id);
+  const prog = billProgress(rows, bill.paid_by);
 
   return (
     <main>
       <Header title={bill.name} back="/home" />
       <div className="space-y-4 px-4 pb-10">
-        <div>
-          <div className="text-[28px] font-medium">{fmt(bill.total_amount)}</div>
-          <div className="text-ink2">
-            {payerName} paid · {bill.split_mode} split
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-[28px] font-medium">{fmt(bill.total_amount)}</div>
+            <div className="text-ink2">
+              {payerName} paid · {bill.split_mode} split
+            </div>
+            <div className="mt-1 text-sm text-ink2">
+              {prog.paid === prog.total ? "Everyone has paid" : `${prog.paid} of ${prog.total} paid`}
+            </div>
           </div>
+          <Ring paid={prog.paid} total={prog.total} size={72} />
         </div>
         <div className="space-y-2">
           {rows.map((x) => {
@@ -51,7 +51,7 @@ export default function BillDetail() {
                 {!isPayer && (
                   <div className="space-y-0.5 text-xs text-muted">
                     <div>
-                      Last reminder: {x.status === "confirmed" ? "n/a" : ago(x.last_reminded_at, s.now())}
+                      Last reminder: {x.status === "confirmed" ? "n/a" : agoLabel(x.last_reminded_at, s.now())}
                       {x.paid_method ? ` · paid via ${x.paid_method}` : ""}
                     </div>
                     {x.status === "waiting" && (

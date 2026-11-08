@@ -5,7 +5,13 @@ export type Profile = {
   cashtag: string;
   zelle_handle: string;
 };
-export type Household = { id: string; name: string; invite_code: string; nudge_every_days: number };
+export type Household = {
+  id: string;
+  name: string;
+  invite_code: string;
+  nudge_every_days: number;
+  emoji: string;
+};
 export type SplitMode = "equal" | "amounts" | "percent";
 export type ShareStatus = "waiting" | "marked_paid" | "confirmed";
 export type Bill = {
@@ -36,5 +42,6 @@ export type Nudge = {
   to: string; // profile id who receives the message
   kind: "new_bill" | "reminder" | "manual";
   message: string;
+  note: string; // e.g. "Last nudge before this: 2 days ago"
   at: number;
 };

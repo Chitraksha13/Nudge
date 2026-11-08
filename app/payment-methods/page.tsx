@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Header, Input, Label, useRequire } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function PaymentMethods() {
   const s = useRequire(false);
@@ -39,6 +40,10 @@ export default function PaymentMethods() {
           <Input value={zelle} onChange={(e) => setZelle(e.target.value)} placeholder="you@email.com" />
         </div>
         <Button disabled={!ok} onClick={save}>Save</Button>
+        <div className="border-t border-line pt-4">
+          <Label>Appearance</Label>
+          <ThemeToggle />
+        </div>
       </div>
     </main>
   );
